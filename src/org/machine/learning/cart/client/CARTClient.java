@@ -18,7 +18,7 @@ public class CARTClient {
     }
     
     private void start() throws IOException {
-        List<List<String>> rawData = DecisionTreeUtils.getTrainingData("./data/variety.txt");
+        List<List<String>> rawData = DecisionTreeUtils.getTrainingData("./data/loan.txt");
         CARTCore core = new CARTCore();
         createDecisionTree(core, rawData);
     }
@@ -62,7 +62,7 @@ public class CARTClient {
         MinGINITuple<String, String, Double> minGINITuple = core.minGiniMap(splitAttributeDataList);
         CARTUtils.transformAttruteStatus(splitAttributeDataList, minGINITuple);
         
-        // 此处为剪枝
+        // 此处为"剪枝"
         Set<String> classifySet = CARTUtils.getClassifyList(splitAttributeDataList);
         if (classifySet.size() == 1) {
             AttributeNode leafNode = new AttributeNode(classifySet.iterator().next());

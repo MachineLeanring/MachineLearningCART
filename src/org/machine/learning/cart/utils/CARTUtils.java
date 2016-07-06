@@ -10,6 +10,7 @@ import java.util.Set;
 
 import org.core.utils.str.StringUtils;
 import org.machine.learning.cart.model.ContinuouslyVariableUnit;
+import org.machine.learning.cart.model.MinContinuouslyGINITuple;
 import org.machine.learning.cart.model.MinGINITuple;
 
 public class CARTUtils {
@@ -24,7 +25,7 @@ public class CARTUtils {
         for (Integer index : indexs) {
             List<ContinuouslyVariableUnit> units = extractionContinuouslyVariableUnits(data, index);
             units.sort(new ContinuouslyVariableUnitComparatorByValue());
-            int threshold = units.get(getAttributeThreshold(units)).getValue();
+            int threshold = units.get(getAttributeThreshold(units).getMinGINIIndex()).getValue();
             transformContinuouslyVariablesByThreshold(data, index, threshold);
         }
     }
@@ -82,6 +83,30 @@ public class CARTUtils {
         }
         
         return classifyList;
+    }
+    
+    /**
+     * 计算连续变量的阈值
+     * 
+     * @param units
+     * @return
+     */
+    public static MinContinuouslyGINITuple<Integer, Double> getAttributeThreshold(List<ContinuouslyVariableUnit> units) {
+        MinContinuouslyGINITuple<Integer, Double> minGINITuple = new MinContinuouslyGINITuple<>();
+        double minGINI = Double.MAX_VALUE;
+        int minGINIIndex = 0;
+        for (int index = 0; index < units.size() - 1; index++) {
+            double gini = getGINIByThreshold(units, index);
+            if (minGINI > gini) {
+                minGINI = gini;
+                minGINIIndex = index;
+            }
+        }
+        
+        minGINITuple.setMinGINI(minGINI);
+        minGINITuple.setMinGINIIndex(minGINIIndex);
+        
+        return minGINITuple;
     }
     
     // TODO -------------------------------------------- private separated line ----------------------------------------------
@@ -144,33 +169,13 @@ public class CARTUtils {
     }
     
     /**
-     * 计算连续变量的阈值
-     * 
-     * @param units
-     * @return
-     */
-    private static int getAttributeThreshold(List<ContinuouslyVariableUnit> units) {
-        double maxInfo = 0.0;
-        int maxIndex = 0;
-        for (int index = 0; index < units.size() - 1; index++) {
-            double info = getInfoByThreshold(units, index);
-            if (maxInfo < info) {
-                maxInfo = info;
-                maxIndex = index;
-            }
-        }
-        
-        return maxIndex;
-    }
-    
-    /**
      * 通过某一个阈值计算 Info
      * 
      * @param units
      * @param splitIndex
      * @return
      */
-    private static double getInfoByThreshold(List<ContinuouslyVariableUnit> units, int splitIndex) {
+    private static double getGINIByThreshold(List<ContinuouslyVariableUnit> units, int splitIndex) {
         Set<String> classifySet = getContinuouslyVariableUnitClassifySet(units);
         Map<String, Integer> leftMap = getContinuouslyVariableUnitMap(units, 0, splitIndex, classifySet);
         Map<String, Integer> rightMap = getContinuouslyVariableUnitMap(units, splitIndex + 1, units.size() - 1, classifySet);
@@ -202,6 +207,7 @@ public class CARTUtils {
      * @return
      */
     private static Map<String, Integer> getContinuouslyVariableUnitMap(List<ContinuouslyVariableUnit> units, int startIndex, int endIndex, Set<String> classifySet) {
+        // TODO
         Map<String, Integer> unitMap = new HashMap<>();
         for (String classify : classifySet) {
             unitMap.put(classify, 0);
@@ -228,7 +234,7 @@ public class CARTUtils {
     private static double infoBySplitThreshold(Map<String, Integer> leftMap, Map<String, Integer> rightMap) {
         int[] leftValues = getContinuouslyVariableUnitCounts(leftMap);
         int[] rightValues = getContinuouslyVariableUnitCounts(rightMap);
-        return info(leftValues, rightValues);
+        return gini(leftValues, rightValues);
     }
     
     /**
@@ -239,39 +245,38 @@ public class CARTUtils {
      * @return
      */
     private static int[] getContinuouslyVariableUnitCounts(Map<String, Integer> unitMap) {
-        int[] unitCounts = new int[unitMap.size()];
+        int[] unitCounts = new int[unitMap.size() == 1 ? 2 : unitMap.size()];
         Iterator<Map.Entry<String, Integer>> iterator = unitMap.entrySet().iterator();
         for (int i = 0; i < unitCounts.length; i++) {
             if (iterator.hasNext()) {
                 unitCounts[i] = iterator.next().getValue();
             }
         }
+        
+        if (unitMap.size() == 1) {
+            unitCounts[1] = 0;
+        }
+        
         return unitCounts;
     }
     
-    private static double info(int[] left, int[] right) {
+    private static double gini(int[] left, int[] right) {
         double totalCount = 0.0;
         double leftCount = 0.0;
         double rightCount = 0.0;
         for (int value : left) {
-            if (value == 0) {
-                return 0.0;
-            }
             leftCount += value;
         }
         for (int value : right) {
-            if (value == 0) {
-                return 0.0;
-            }
             rightCount += value;
         }
         totalCount = leftCount + rightCount;
         
-        return (leftCount / totalCount) * info(left[0], left[1]) + (rightCount / totalCount) * info(right[0], right[1]);
+        return (leftCount / totalCount) * gini(left[0], left[1]) + (rightCount / totalCount) * gini(right[0], right[1]);
     }
     
-    private static double info(int a, int b) {
+    private static double gini(int a, int b) {
         int totalCount = a + b;
-        return -1.0 * (1.0 * a / totalCount) * CommonUtils.log2(1.0 * a / totalCount) - (1.0 * b / totalCount) * CommonUtils.log2(1.0 * b / totalCount);
+        return 1 - (Math.pow((1.0 * a / totalCount), 2) + Math.pow((1.0 * b / totalCount), 2));
     }
 }

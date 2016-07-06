@@ -1,12 +1,17 @@
 package org.machine.learning.cart.core;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.core.utils.str.StringUtils;
+import org.machine.learning.cart.model.ContinuouslyVariableUnit;
+import org.machine.learning.cart.model.MinContinuouslyGINITuple;
 import org.machine.learning.cart.model.MinGINITuple;
 import org.machine.learning.cart.utils.CARTUtils;
+import org.machine.learning.cart.utils.ContinuouslyVariableUnitComparatorByValue;
 import org.machine.learning.cart.utils.DecisionTreeUtils;
 
 public class CARTCore {
@@ -67,8 +72,67 @@ public class CARTCore {
      * @return
      */
     private Map<String, Double> currentAttributeMinGini(Map<String, Map<String, Integer>> attributeMap) {
-        Map<String, Double> result = new HashMap<>();
         Set<String> keySet = attributeMap.keySet();
+        
+        if (StringUtils.RegexUtils.isNumberString(keySet.iterator().next())) {
+            return continuouslyVariable(attributeMap);
+        } else {
+            return discreteVariable(attributeMap);
+        }
+    }
+    
+    /**
+     * 处理连续变量
+     * 
+     * {220={否=1}, 100={否=1}, 125={否=1}, 90={是=1}, 70={否=1}, 60={否=1}, 95={是=1}, 85={是=1}, 75={否=1}, 120={否=1}}
+     * {220={否=1}, 100={否=1}, 125={否=1}, 90={是=2}, 70={否=1}, 60={否=1}, 95={是=1}, 75={否=1}, 120={否=1}}
+     * {220={否=1}, 100={否=1}, 125={否=1}, 90={否=1, 是=1}, 70={否=1}, 60={否=1}, 95={是=1}, 75={否=1}, 120={否=1}}
+     * 
+     * @param attributeMap
+     * @return
+     */
+    private Map<String, Double> continuouslyVariable(Map<String, Map<String, Integer>> attributeMap) {
+        Map<String, Double> result = new HashMap<>();
+        List<ContinuouslyVariableUnit> units = getContinuouslyVariableUnits(attributeMap);
+        units.sort(new ContinuouslyVariableUnitComparatorByValue());
+        
+        MinContinuouslyGINITuple<Integer, Double> minGINITuple = CARTUtils.getAttributeThreshold(units);
+        result.put(String.valueOf(units.get(minGINITuple.getMinGINIIndex()).getValue()), minGINITuple.getMinGINI());
+        
+        return result;
+    }
+    
+    /**
+     * 获得某一连续变量的所有值及分类结果
+     * 
+     * @param attributeMap
+     * @return
+     */
+    private List<ContinuouslyVariableUnit> getContinuouslyVariableUnits(Map<String, Map<String, Integer>> attributeMap) {
+        List<ContinuouslyVariableUnit> units = new ArrayList<>();
+        Set<String> keySet = attributeMap.keySet();
+        for (String key : keySet) {
+            Map<String, Integer> subMap = attributeMap.get(key);
+            Set<String> subKeySet = subMap.keySet();
+            for (String subKey : subKeySet) {
+                for (int i = 0; i < subMap.get(subKey); i++) {
+                    units.add(new ContinuouslyVariableUnit(Integer.parseInt(key), subKey));
+                }
+            }
+        }
+        
+        return units;
+    }
+    
+    /**
+     * 处理离散变量
+     * 
+     * @param attributeMap
+     * @return
+     */
+    private Map<String, Double> discreteVariable(Map<String, Map<String, Integer>> attributeMap) {
+        Set<String> keySet = attributeMap.keySet();
+        Map<String, Double> result = new HashMap<>();
         
         String minStatus = "";
         double minGini = Double.MAX_VALUE;
